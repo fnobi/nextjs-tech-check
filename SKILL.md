@@ -13,22 +13,30 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 
 以下をすべて確認すること:
 
-**A. ロックファイルの状態**
+**A. Node.js バージョンの確認**
+- `.node-version` が存在すること
+- 記載されているバージョンが `22` 以上であること（例: `22.0.0` や `22` はOK、`20.x` はNG）
+- 存在しない・22未満の場合は `nodenv versions` を実行してローカルにインストール済みのバージョンを確認する:
+  - 22以上のバージョンが存在すれば、その中で最新のものを `.node-version` に書き込む（最新pnpmの動作要件）
+  - 22以上が一つも存在しなければ「Node.js 22以上がローカルに見つかりません。`nodenv install 22.x.x` 等でインストール後に再実行してください」とユーザーに伝えて中断する
+
+**B. ロックファイルの状態**
 - `package-lock.json` が存在していないこと（存在する場合は問題として報告）
 - `pnpm-lock.yaml` が存在すること（存在しない場合は問題として報告）
 
-**B. package.json の `packageManager` フィールド**
+**C. package.json の `packageManager` フィールド**
 - `package.json` に `packageManager` フィールドがあること
 - 値が `pnpm@X.Y.Z` の形式でバージョンが明示されていること
 - 存在しない・pnpm以外の場合は修正が必要
 
-**C. GitHub Actions ワークフローでの pnpm 利用**
+**D. GitHub Actions ワークフローでの pnpm 利用**
 - `.github/workflows/` 配下のすべての `.yml` / `.yaml` ファイルを検査
 - 依存インストールに `npm install` や `yarn install` を使っている箇所は `pnpm install` に修正
 - `actions/cache` のキャッシュパスやキーが `package-lock.json` を参照している場合は `pnpm-lock.yaml` に修正
 - ワークフロー内の `env` 変数で `ACTIONS_LOCK_FILE` などにロックファイル名が設定されている場合も同様に修正
 - ビルドコマンドが `npm run build` になっている場合は `pnpm run build`（または `pnpm build`）に修正
-- `actions/setup-node` を使っている場合は pnpm のセットアップ（`pnpm/action-setup@v4`）が追加されているか確認し、なければ追加を提案
+- `actions/setup-node` を使っている場合は pnpm のセットアップ（`pnpm/action-setup@v4`）が追加されているか確認し、なければ追加する
+  - `version` は指定しないこと（`package.json` の `packageManager` フィールドに記載したバージョンが自動的に適用される）
 
 ### 2. GitHub Actions × Firebase Deploy の認証方式確認
 
@@ -87,9 +95,12 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 
 1. まずすべてのファイルを読み込んで現状を把握する
 2. 問題点をリストアップして報告する
-3. 修正が必要な箇所について、ユーザーの確認を取ってから修正を適用する
+3. 修正が必要な箇所について、以下の方針で対応する:
    - 明らかな機械的修正（npmをpnpmに変える等）は確認なしで進めてよい
-   - Workload Identity 移行のような影響範囲が大きい変更は、修正内容を先に提示してから実施する
+   - Workload Identity 移行・firebase-admin 書き換えのような影響範囲が大きい変更は、修正内容を先に提示してから実施する
+   - **pnpm 移行が必要な場合**: ファイル編集後に以下のコマンドを順に実行する（ユーザーの権限許可が必要）
+     1. `rm package-lock.json`（存在する場合のみ）
+     2. `pnpm install`
 4. 修正完了後に、GitHub側で必要な設定作業があればその内容も案内する
 
 ## 出力フォーマット
@@ -98,6 +109,7 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 ## チェック結果
 
 ### パッケージマネージャー（pnpm）
+- [OK/NG] .node-version が存在し Node.js 22 以上が指定されている（現在値: xxx）
 - [OK/NG] package-lock.json が存在しない
 - [OK/NG] pnpm-lock.yaml が存在する
 - [OK/NG] package.json に packageManager フィールドがある（現在値: xxx）
