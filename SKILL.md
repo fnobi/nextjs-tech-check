@@ -1,6 +1,6 @@
 ---
 name: nextjs-tech-check
-description: Next.jsプロジェクトの技術構成（パッケージマネージャー・GitHub Actionsの認証方式など）を確認し、問題があれば修正するスキル
+description: Next.jsプロジェクトの技術構成（パッケージマネージャー・GitHub Actionsの認証方式・firebase-adminのローカル認証など）を確認し、問題があれば修正するスキル
 ---
 
 # Next.js 技術構成チェック & 修正スキル
@@ -48,7 +48,40 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 - `--token` の削除
 - `google-github-actions/auth@v2` ステップの追加（`workload_identity_provider` / `service_account` は secrets 参照のプレースホルダーとして `${{ secrets.WIF_PROVIDER }}` / `${{ secrets.WIF_SERVICE_ACCOUNT }}` を使用）
 - `permissions` ブロックへの `id-token: write` と `contents: read` の追加
-- 修正後は「GitHub側でWorkload Identityの設定が必要」である旨をユーザーに案内すること
+- ワークフロー修正後、`templates/workload-identity/setup.sh` をプロジェクトルートの `setup-workload-identity.sh` としてコピーし、以下の定数をプロジェクト情報から推測して書き換える:
+  - `PROJECT_ID`: `.env` / `.env.local` / Firebase設定ファイル / ワークフローの env から推測
+  - `REPO`: git remote URL または `.github/workflows/` 内の `github.repository` 参照から推測（形式: `org/repo`）
+  - `PROJECT_NUMBER`: 自動推測が難しいため `your-project-number` のままコメント付きで残す
+  - `SERVICE_ACCOUNT_NAME`: デフォルト `github-actions` のまま（プロジェクト固有の名前が判明していれば変更）
+- コピー・書き換え後、「`setup-workload-identity.sh` を確認・実行してください」とユーザーに案内すること
+
+### 3. 手元スクリプトの firebase-admin 認証方式確認
+
+プロジェクト内の TypeScript / JavaScript ファイル（`scripts/`、`tools/`、`src/` 等）で `firebase-admin` を import / require しているファイルを対象に:
+
+**鍵ファイル認証の検出（問題あり）**
+- `admin.credential.cert(...)` を使っている（ファイルパスやサービスアカウントオブジェクトを直接渡している）
+  - 例: `admin.credential.cert('./serviceAccountKey.json')`
+  - 例: `admin.credential.cert(require('./serviceAccountKey.json'))`
+  - 例: `admin.credential.cert(JSON.parse(fs.readFileSync(...)))`
+- `initializeApp` の引数に `credential` キーで上記のいずれかを渡している
+
+**ADC 認証（正しい状態）**
+- `credential` を指定せず `projectId` のみ環境変数から渡している
+  - 例: `admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID })`
+- または `admin.initializeApp()` のみ（`GOOGLE_CLOUD_PROJECT` 等の環境変数で project が解決される）
+
+**ADC 認証（正しい状態）の参考実装**
+- `templates/cli/firebase-app.ts` と `templates/cli/env.ts` を読み込み、このパターンを参考に修正する
+  - `firebase-app.ts`: `initializeApp({ projectId })` のみで初期化し、各サービスを遅延取得するパターン
+  - `env.ts`: `.env` ファイルを `loadEnvFile` で読み込み、環境変数を export するエントリーポイント
+
+**鍵ファイル認証が検出された場合の修正方針**
+- `credential: admin.credential.cert(...)` の行を削除
+- `initializeApp` の引数を `{ projectId: FIREBASE_PROJECT_ID }` に変更し、プロジェクト内の既存の環境変数名（例: `NEXT_PUBLIC_FIREBASE_PROJECT_ID`）に合わせる
+- firebase app 参照が複数ファイルに散在している場合は `templates/cli/firebase-app.ts` のような集約モジュールへの切り出しを提案する
+- ローカル実行時は `gcloud auth application-default login` で ADC を取得する旨をユーザーに案内すること
+- `.env` や `.env.local` に project ID の環境変数が設定されているか確認し、なければ追記を提案する
 
 ## 実行手順
 
@@ -71,8 +104,11 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 - ワークフローファイルごとの確認結果:
   - [ファイル名]: [OK/NG + 問題の詳細]
 
-### Firebase 認証方式
+### Firebase 認証方式（GitHub Actions）
 - [対象ワークフローなし / OK / NG + 問題の詳細]
+
+### firebase-admin 認証方式（ローカルスクリプト）
+- [対象ファイルなし / OK / NG + 問題の詳細]
 
 ## 修正内容
 [修正が必要な場合、変更箇所の概要を記載]
