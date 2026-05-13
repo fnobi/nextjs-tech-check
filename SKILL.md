@@ -20,16 +20,26 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
   - 22以上のバージョンが存在すれば、その中で最新のものを `.node-version` に書き込む（最新pnpmの動作要件）
   - 22以上が一つも存在しなければ「Node.js 22以上がローカルに見つかりません。`nodenv install 22.x.x` 等でインストール後に再実行してください」とユーザーに伝えて中断する
 
-**B. ロックファイルの状態**
+**B. pnpm workspace の構成確認**
+- `functions/`・`cli/` など独自の `package.json` を持つサブディレクトリが存在するか確認する
+- 存在する場合:
+  - `pnpm-workspace.yaml` が存在し、`packages` にそれらのディレクトリが列挙されていること
+  - ルートの `pnpm-lock.yaml` にロックファイルが一元管理されていること（サブディレクトリに独立した `package-lock.json` や `pnpm-lock.yaml` が存在しないこと）
+- 問題がある場合の修正方針:
+  - `pnpm-workspace.yaml` が存在しなければ作成し、該当ディレクトリを `packages` に追記する
+  - サブディレクトリのロックファイル（`package-lock.json` / `yarn.lock` 等）が存在すれば削除する
+  - `.github/workflows/` 内でサブディレクトリへの `cd` + 個別の依存インストール（例: `cd functions && npm install`）が含まれている場合は削除する（ルートの `pnpm install` がワークスペース全体を解決するため不要）
+
+**C. ロックファイルの状態**
 - `package-lock.json` が存在していないこと（存在する場合は問題として報告）
 - `pnpm-lock.yaml` が存在すること（存在しない場合は問題として報告）
 
-**C. package.json の `packageManager` フィールド**
+**D. package.json の `packageManager` フィールド**
 - `package.json` に `packageManager` フィールドがあること
 - 値が `pnpm@X.Y.Z` の形式でバージョンが明示されていること
 - 存在しない・pnpm以外の場合は修正が必要
 
-**D. GitHub Actions ワークフローでの pnpm 利用**
+**E. GitHub Actions ワークフローでの pnpm 利用**
 - `.github/workflows/` 配下のすべての `.yml` / `.yaml` ファイルを検査
 - 依存インストールに `npm install` や `yarn install` を使っている箇所は `pnpm install` に修正
 - `actions/cache` のキャッシュパスやキーが `package-lock.json` を参照している場合は `pnpm-lock.yaml` に修正
@@ -41,6 +51,16 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 ### 2. GitHub Actions × Firebase Deploy の認証方式確認
 
 `.github/workflows/` 配下のファイルで `firebase deploy` コマンドが含まれているワークフローを対象に:
+
+**firebase-tools のインストール方法確認**
+- ワークフロー内で `npm install -g firebase-tools` / `pnpm add -g firebase-tools` 等のグローバルインストールをしている場合は問題あり
+- `package.json` の `devDependencies` に `firebase-tools` が含まれており、ワークフローが `pnpm install` 後に `pnpm exec firebase deploy` または `npx firebase deploy` で実行している場合は正しい状態
+
+**グローバルインストールが検出された場合の修正方針**
+- ワークフローからグローバルインストールのステップを削除する
+- `pnpm add -D firebase-tools` をプロジェクトに実行してバージョンを固定する（ユーザーに確認の上実行）
+- ワークフロー内の `firebase deploy` を `pnpm exec firebase deploy` に変更する
+- バージョン固定の理由として「Workload Identity 認証が動作するバージョンを確保するため」をユーザーに案内すること
 
 **鍵ファイル・トークン認証の検出（問題あり）**
 - `--token` フラグを使って Firebase 認証している（例: `firebase deploy --token ${{ secrets.FIREBASE_TOKEN }}`）
@@ -138,7 +158,8 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
   - [ファイル名]: [OK/NG + 問題の詳細]
 
 ### Firebase 認証方式（GitHub Actions）
-- [対象ワークフローなし / OK / NG + 問題の詳細]
+- firebase-tools: [対象ワークフローなし / OK（devDependencies） / NG（グローバルインストール）]
+- 認証方式: [対象ワークフローなし / OK / NG + 問題の詳細]
 
 ### firebase-admin 認証方式（ローカルスクリプト）
 - [対象ファイルなし / OK / NG + 問題の詳細]
