@@ -91,6 +91,27 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 - ローカル実行時は `gcloud auth application-default login` で ADC を取得する旨をユーザーに案内すること
 - `.env` や `.env.local` に project ID の環境変数が設定されているか確認し、なければ追記を提案する
 
+### 4. .babelrc の必要性確認
+
+`.babelrc` / `.babelrc.js` / `.babelrc.json` / `babel.config.js` / `babel.config.json` が存在する場合:
+
+**背景**
+- Next.js 12以降はデフォルトで SWC コンパイラーを使用する
+- `.babelrc` 系ファイルが存在すると SWC が無効化され Babel にフォールバックする
+- カスタムプラグインが不要であればファイルを削除して SWC に戻すべき
+
+**確認手順**
+1. `package.json` の `dependencies` / `devDependencies` から Next.js のバージョンを確認する
+2. `.babelrc` の内容を確認し、以下のいずれかに該当すれば**不要と判断**する:
+   - `{ "presets": ["next/babel"] }` のみ（デフォルト設定の再宣言）
+   - Next.js 12以降で、SWC がサポートするプラグインのみを使用している
+3. カスタムプラグインが含まれている場合はユーザーに内容を提示し判断を仰ぐ
+
+**不要と判断した場合の修正方針**
+- `.babelrc` 系ファイルを削除する
+- `package.json` の `devDependencies` から Babel 関連パッケージを確認し、Next.js や他の設定で使われていないものを削除対象としてリストアップしてユーザーに確認する（例: `@babel/core`, `babel-loader`, `@babel/preset-env`, `@babel/preset-react`, `@babel/preset-typescript` 等）
+- ユーザーの承認後、該当パッケージを `pnpm remove` で削除する
+
 ## 実行手順
 
 1. まずすべてのファイルを読み込んで現状を把握する
@@ -121,6 +142,9 @@ description: Next.jsプロジェクトの技術構成（パッケージマネー
 
 ### firebase-admin 認証方式（ローカルスクリプト）
 - [対象ファイルなし / OK / NG + 問題の詳細]
+
+### .babelrc
+- [存在しない / 不要（削除対象）/ 要確認（カスタムプラグインあり） + 詳細]
 
 ## 修正内容
 [修正が必要な場合、変更箇所の概要を記載]
